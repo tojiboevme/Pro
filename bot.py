@@ -105,7 +105,7 @@ async def get_code(message: Message, state: FSMContext):
     ])
     await message.answer(
         f"✅ Barakalla! Kodingiz qabul qilindi!\n"
-        f"🎯 Sizga aksiya uchun raqam berildi: {action_number}\n\n"
+        f"🎯 Sizga aksiya uchun raqam berildi: {action_number}\n\n 🎉 Har oy g‘oliblar @aliglass_uz sahifasida aniqlanadi! \n📲 Obuna bo‘ling, kuzatib boring — omad siz tomonda bo‘lishi mumkin!\n"
         f"Yana kodingiz bormi?",
         reply_markup=markup
     )
