@@ -1,2 +1,7 @@
-BOT_TOKEN = "7461009184:AAGaxqw5y8QOSpDxBp5_7Jy1RBPF3h4c8MY"
-ADMIN_ID = 6050097780  # Admin Telegram ID
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))

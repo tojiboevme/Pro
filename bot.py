@@ -34,7 +34,7 @@ def save_used_code(code: str):
     with open(USED_CODES_FILE, "a", encoding="utf-8") as f:
         f.write(code + "\n")
 
-# ✅ Raqam
+# ✅ Foydalanuvchi raqamini olish
 def get_next_number() -> int:
     if not os.path.exists(USERS_FILE):
         return 1
@@ -47,32 +47,16 @@ class Form(StatesGroup):
     phone = State()
     code = State()
 
-# ✅ Bloklanganini tekshirish
-def is_locked(user_data: dict) -> str | None:
-    now = datetime.now().timestamp()
-    if 'locked_until' in user_data and now < user_data['locked_until']:
-        wait_sec = int(user_data['locked_until'] - now)
-        wait_min = wait_sec // 60
-        wait_txt = f"{wait_min} daqiqa" if wait_min >= 1 else f"{wait_sec} soniya"
-        return f"⏱ Siz vaqtincha bloklangansiz. {wait_txt} dan so‘ng urinib ko‘ring."
-    return None
-
 # ✅ /start
 @dp.message(F.text == "/start")
 async def start_handler(message: Message, state: FSMContext):
-    data = await state.get_data()
-    lock_msg = is_locked(data)
-    if lock_msg:
-        await message.answer(lock_msg)
-        return
-
     await message.answer(
         "👋 Assalomu alaykum! Sizni Ali Glass aksiyasida ko‘rib turganimizdan xursandmiz!\n"
         "🌟 Har bir kod — bu imkoniyat. Har bir imkoniyat — bu orzuga bir qadam yaqinlik !!!",
         reply_markup=main_menu
     )
 
-# ✅ Aksiya tugmasi
+# ✅ "Aksiyada ishtirok etish"
 @dp.message(F.text == "🎁 Aksiyada ishtirok etish")
 async def register_start(message: Message, state: FSMContext):
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[
@@ -81,63 +65,56 @@ async def register_start(message: Message, state: FSMContext):
     await state.set_state(Form.phone)
     await message.answer("Iltimos, telefon raqamingizni pastdagi tugma orqali yuboring:", reply_markup=keyboard)
 
-# ✅ Telefon tugmadan
+# ✅ Telefon raqam tugmasi orqali
 @dp.message(Form.phone, F.contact)
 async def get_phone(message: Message, state: FSMContext):
     phone = message.contact.phone_number
     await state.update_data({
         'phone': phone,
-        'retries': 0,
-        'locked_until': 0
+        'retries': 0
     })
     await state.set_state(Form.code)
     await message.answer("🎯 Endi 8 xonali mahsulot kodini kiriting:", reply_markup=ReplyKeyboardRemove())
 
-# ❌ Oddiy text yuborsa
+# ❌ Telefon raqamini noto‘g‘ri yuborish
 @dp.message(Form.phone, F.text)
 async def phone_invalid(message: Message, state: FSMContext):
-    await message.answer("❗️ Iltimos, 📱 telefon tugmasi orqali raqamingizni yuboring.")
+    await message.answer("❗️ Iltimos, faqat 📱 telefon tugmasi orqali raqam yuboring.")
 
-# ✅ Kodni tekshirish
 @dp.message(Form.code)
 async def get_code(message: Message, state: FSMContext):
     user_data = await state.get_data()
-    now = datetime.now().timestamp()
-
-    # Bloklanganmi tekshirish
-    lock_msg = is_locked(user_data)
-    if lock_msg:
-        await message.answer(lock_msg)
-        return
-
     code = message.text.strip()
     retries = user_data.get("retries", 0)
 
+    # Kod noto‘g‘ri bo‘lsa
     if code not in valid_codes:
         retries += 1
+        await state.update_data(retries=retries)
+
         if retries >= 3:
-            await state.update_data(locked_until=now + 60)
             await state.clear()
-            await message.answer("🚫 3 marta noto‘g‘ri kod kiritdingiz. 1 daqiqadan so‘ng urinib ko‘ring.")
+            await message.answer("🚫 3 marta noto‘g‘ri kod kiritdingiz.\nIltimos, '🎁 Aksiyada ishtirok etish' tugmasini bosib qaytadan urinib ko‘ring.", reply_markup=main_menu)
             return
         else:
-            await state.update_data(retries=retries)
             qoldi = 3 - retries
             await message.answer(f"❌ Kod noto‘g‘ri. Yana {qoldi} ta urinish qoldi.")
             return
 
+    # Kod ishlatilganmi
     if is_code_used(code):
-        await message.answer("⚠️ Bu kod allaqachon ishlatilgan. Yangi kod kiriting.")
+        await message.answer("⚠️ Bu kod allaqachon ishlatilgan. Iltimos, boshqa kod kiriting.")
         return
 
+    # Hammasi to‘g‘ri bo‘lsa, saqlaymiz
     action_number = get_next_number()
+    now = datetime.now().isoformat()
 
-    # Yozish uchun faqat kerakli ma'lumotlar
-    record = {
+    save_data = {
         'phone': user_data['phone'],
         'code': code,
         'telegram_id': message.from_user.id,
-        'datetime': datetime.now().isoformat(),
+        'datetime': now,
         'random_number': action_number
     }
 
@@ -147,7 +124,7 @@ async def get_code(message: Message, state: FSMContext):
         writer = csv.DictWriter(f, fieldnames=['phone', 'code', 'telegram_id', 'datetime', 'random_number'])
         if not file_exists:
             writer.writeheader()
-        writer.writerow(record)
+        writer.writerow(save_data)
 
     save_used_code(code)
 
@@ -159,7 +136,8 @@ async def get_code(message: Message, state: FSMContext):
     )
     await state.clear()
 
-# ✅ Admin uchun eksport
+
+# ✅ Admin uchun export
 @dp.message(F.text == "/export")
 async def export_handler(message: Message):
     if message.from_user.id != ADMIN_ID:
